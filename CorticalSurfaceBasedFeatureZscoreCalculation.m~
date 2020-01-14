@@ -1,0 +1,355 @@
+function CorticalSurfaceBasedFeatureZscoreCalculation(CaseList_Control, CaseList_Patient, output_dir, sampling_space, meshnum)
+  
+%% Reading control files: surface, TAL T1 volume, csf pvf map ...
+fid = fopen(CaseList_Control);
+subject = textscan(fid, '%s%s%s%s', 'Delimiter', ',', 'CollectOutput', 1);
+case_prefix_set_con     = subject{1}(:, 1);
+case_num_set_con        = subject{1}(:, 2);
+case_CIVET_path_set_con = subject{1}(:, 3);
+case_CSF_path_set_con   = subject{1}(:, 4);
+fclose(fid);
+
+%% Reading patient files: surface, TAL T1 volume, csf pvf map ...
+fid = fopen(CaseList_Patient);
+subject = textscan(fid, '%s%s%s%s', 'Delimiter', ',', 'CollectOutput', 1);
+case_prefix_set_pat     = subject{1}(:, 1);
+case_num_set_pat        = subject{1}(:, 2);
+case_CIVET_path_set_pat = subject{1}(:, 3);
+case_CSF_path_set_pat   = subject{1}(:, 4);
+fclose(fid);
+
+intracortical_surface_number = 3;
+subcortical_surface_number = 3;
+
+if(meshnum == 81920)
+    vertexnum = 81924;
+    name_surf_left = SurfStatListDir('/data/noel/noel6/seokjun/01_project/IntracorticalAnalysis/01_analysis/surf_reg_model_left.obj');
+    name_surf_right = SurfStatListDir('/data/noel/noel6/seokjun/01_project/IntracorticalAnalysis/01_analysis/surf_reg_model_right.obj');
+    template_S = SurfStatAvSurf([name_surf_left, name_surf_right]);
+    template_mask = SurfStatMaskCut(template_S);    
+elseif(meshnum == 327680)
+    vertexnum = 327684;
+    name_surf_left = SurfStatListDir('/data/noel/noel6/seokjun/01_project/IntracorticalAnalysis/01_analysis/surf_reg_model_left_327680.obj');
+    name_surf_right = SurfStatListDir('/data/noel/noel6/seokjun/01_project/IntracorticalAnalysis/01_analysis/surf_reg_model_right_327680.obj');
+    template_S = SurfStatAvSurf([name_surf_left, name_surf_right]);
+    template_mask = SurfStatMaskCut(template_S);    
+end
+
+RI_con = zeros(size(case_num_set_con, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+PG_con = zeros(size(case_num_set_con, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+TG_con = zeros(size(case_num_set_con, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+CT_con = zeros(size(case_num_set_con, 1), vertexnum);
+MC_con = zeros(size(case_num_set_con, 1), vertexnum);
+SD_con = zeros(size(case_num_set_con, 1), vertexnum);
+
+%% Read feature files
+for i = 1 : size(case_num_set_con, 1)
+    case_CSF_path = case_CSF_path_set_con{i};
+    case_prefix = case_prefix_set_con{i};
+    case_num = case_num_set_con{i};    
+    disp(['Control: ' case_prefix '_' case_num ' processing!']);
+    
+    %% RI, PG, TG
+    for j = 1 : 2+intracortical_surface_number+subcortical_surface_number
+
+        switch j
+            case 1
+                RI_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case {2, 3, 4}
+                RI_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case 5
+                RI_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case {6, 7, 8}
+                RI_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_RI_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_RI_hk_sm_10_rsl.txt' ] });
+                PG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_con(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+        end
+    end
+    
+    %% CT, MC, SD
+    CT_con(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_ct_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_ct_hk_sm_10_rsl.txt' ] });    
+    MC_con(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '_mc_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '_mc_hk_sm_10_rsl.txt' ] });
+    SD_con(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '_sd_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '_sd_hk_sm_10_rsl.txt' ] });
+end
+
+RI_mean_con = squeeze(mean(RI_con, 1))';
+PG_mean_con = squeeze(mean(PG_con, 1))';
+TG_mean_con = squeeze(mean(TG_con, 1))';
+CT_mean_con = mean(CT_con, 1);
+MC_mean_con = mean(MC_con, 1);
+SD_mean_con = mean(SD_con, 1);
+
+RI_std_con = squeeze(std(RI_con, 0, 1))';
+PG_std_con = squeeze(std(PG_con, 0, 1))';
+TG_std_con = squeeze(std(TG_con, 0, 1))';
+CT_std_con = std(CT_con, 1);
+MC_std_con = std(MC_con, 1);
+SD_std_con = std(SD_con, 1);
+
+RI_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+PG_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+TG_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+CT_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+MC_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+SD_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+
+RI_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+PG_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+TG_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum, 2+intracortical_surface_number+subcortical_surface_number);
+CT_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+MC_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+SD_zscore_pat = zeros(size(case_num_set_pat, 1), vertexnum);
+
+ind_S = [];
+ind_mask = [];
+
+%% Read feature files
+for i = 1 : size(case_num_set_pat, 1)
+    case_CSF_path = case_CSF_path_set_pat{i};
+    case_prefix = case_prefix_set_pat{i};
+    case_num = case_num_set_pat{i};
+    mkdir([output_dir '/' case_num]);
+    disp(['Patient: ' case_prefix '_' case_num ' processing!']);
+    if(exist([  case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '.obj.gz' ], 'file'))
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s   
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_left_' num2str(meshnum) '_' sampling_space '.obj.gz']); s
+        
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s   
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s   
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s  
+        [r,s] = system(['gunzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj.gz']); s   
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{1} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{1} = SurfStatMaskCut(ind_S_temp{1});
+
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{2} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{2} = SurfStatMaskCut(ind_S_temp{2});
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{3} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{3} = SurfStatMaskCut(ind_S_temp{3});
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{4} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{4} = SurfStatMaskCut(ind_S_temp{4});
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{5} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{5} = SurfStatMaskCut(ind_S_temp{5});
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{6} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{6} = SurfStatMaskCut(ind_S_temp{6});
+        
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{7} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{7} = SurfStatMaskCut(ind_S_temp{7});        
+
+        name_ind_surf_left  = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_left_'  num2str(meshnum) '_' sampling_space '.obj' ]);
+        name_ind_surf_right = SurfStatListDir([ case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj' ]);
+        ind_S_temp{8} = SurfStatAvSurf([name_ind_surf_left, name_ind_surf_right]);
+        ind_mask_temp{8} = SurfStatMaskCut(ind_S_temp{8});        
+        
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_left_' num2str(meshnum) '_' sampling_space '.obj']); s   
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_left_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_left_' num2str(meshnum) '_' sampling_space '.obj']); s
+        
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_intracortical_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_1_right_' num2str(meshnum) '_' sampling_space '.obj']); s   
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_2_right_' num2str(meshnum) '_' sampling_space '.obj']); s  
+        [r,s] = system(['gzip -vf ' case_CSF_path '/' case_num '/surfaces/' case_prefix '_' case_num '_white_surface_3_right_' num2str(meshnum) '_' sampling_space '.obj']); s 
+        
+        ind_S = [ ind_S; ind_S_temp ];
+        ind_mask = [ ind_mask; ind_mask_temp ];
+    end
+end
+
+%% Read feature files
+for i = 1 : size(case_num_set_pat, 1)
+    case_CSF_path = case_CSF_path_set_pat{i};
+    case_prefix = case_prefix_set_pat{i};
+    case_num = case_num_set_pat{i};    
+    mkdir([output_dir '/' case_num]);    
+    disp(['Patient: ' case_prefix '_' case_num ' processing!']);
+    
+    ind_inc_Surf = ind_S(i, 1:5);
+    ind_sub_Surf = ind_S(i, 6:8);
+    
+    %% RI, PG, TG
+    for j = 1 : 2+intracortical_surface_number+subcortical_surface_number
+        switch j
+            case 1
+                RI_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case {2, 3, 4}
+                RI_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_' num2str(j-1) '_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case 5
+                RI_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_RI_corrected_hk_sm_10_rsl.txt' ] });
+                PG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+            case {6, 7, 8}
+                RI_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_RI_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_RI_hk_sm_10_rsl.txt' ] });
+                PG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_pg_hk_sm_10_rsl.txt' ] });
+                TG_pat(i, :, j) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_left_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt'  ], ...
+                                                     [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_white_surface_' num2str(j-5) '_right_' num2str(meshnum) '_' sampling_space '_tg_hk_sm_10_rsl.txt' ] });                                             
+        end
+        
+        RI_zscore_pat(i, :, j) = (RI_pat(i, :, j) - RI_mean_con(j ,:))./RI_std_con(j ,:);
+        PG_zscore_pat(i, :, j) = (PG_pat(i, :, j) - PG_mean_con(j ,:))./PG_std_con(j ,:);
+        TG_zscore_pat(i, :, j) = (TG_pat(i, :, j) - TG_mean_con(j ,:))./TG_std_con(j ,:);
+    end
+    
+    %% CT, MC, SD
+    CT_pat(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_left_' num2str(meshnum) '_' sampling_space '_ct_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_gray_surface_right_' num2str(meshnum) '_' sampling_space '_ct_hk_sm_10_rsl.txt' ] });    
+    MC_pat(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '_mc_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '_mc_hk_sm_10_rsl.txt' ] });
+    SD_pat(i, :) = SurfStatReadData({ [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_left_' num2str(meshnum) '_' sampling_space '_sd_hk_sm_10_rsl.txt'  ], ...
+                                      [ case_CSF_path '/' case_num '/measurement/' case_prefix '_' case_num '_intracortical_surface_2_right_' num2str(meshnum) '_' sampling_space '_sd_hk_sm_10_rsl.txt' ] });
+                                  
+    CT_zscore_pat(i, :) = (CT_pat(i, :) - CT_mean_con)./CT_std_con;
+    MC_zscore_pat(i, :) = (MC_pat(i, :) - MC_mean_con)./MC_std_con;
+    SD_zscore_pat(i, :) = (SD_pat(i, :) - SD_mean_con)./SD_std_con;
+    
+%     figure; set(gcf, 'position', [680 380 660 720]);
+%     CSFSurfStatView(squeeze(RI_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), ind_inc_Surf, 'INC', 'Relative Intensity zscore'); CSFSurfStatViewColLim([-5 5]); 
+%     exportfig(gcf, [output_dir '/' case_num '/' case_prefix '_' case_num '_Intracortical_RI_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+% 
+%     figure; set(gcf, 'position', [680 380 660 400]);
+%     CSFSurfStatView(squeeze(RI_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), ind_sub_Surf, 'INC', 'Relative Intensity zscore'); CSFSurfStatViewColLim([-5 5]); 
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_RI_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);    
+% 
+%     figure; set(gcf, 'position', [680 380 660 720]);
+%     CSFSurfStatView(squeeze(PG_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), ind_inc_Surf, 'INC', 'Perpendicular Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Intracortical_PG_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+% 
+%     figure; set(gcf, 'position', [680 380 660 400]);
+%     CSFSurfStatView(squeeze(PG_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), ind_sub_Surf, 'INC', 'Perpendicular Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_PG_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);    
+% 
+%     figure; set(gcf, 'position', [680 380 660 720]);
+%     CSFSurfStatView(squeeze(TG_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), ind_inc_Surf, 'INC', 'Tangential Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Intracortical_TG_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+% 
+%     figure; set(gcf, 'position', [680 380 660 400]);
+%     CSFSurfStatView(squeeze(TG_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), ind_sub_Surf, 'INC', 'Tangential Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_TG_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+%     
+%     figure; set(gcf, 'position', [680 380 660 200]);
+%     CSFSurfStatView(CT_zscore_pat(i, :).*template_mask, ind_inc_Surf{3}, 'MF', 'Cortical Thickness zscore'); CSFSurfStatViewColLim([-5 5]); 
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_CT_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+% 
+%     figure; set(gcf, 'position', [680 380 660 200]);
+%     CSFSurfStatView(MC_zscore_pat(i, :).*template_mask, ind_inc_Surf{3}, 'MF', 'Mean Curvature zscore'); CSFSurfStatViewColLim([-5 5]); 
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_MC_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+% 
+%     figure; set(gcf, 'position', [680 380 660 200]);
+%     CSFSurfStatView(SD_zscore_pat(i, :).*template_mask, ind_inc_Surf{3}, 'MF', 'Sulcal Depth zscore'); CSFSurfStatViewColLim([-5 5]);
+%     exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_SD_zscore' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+    
+    
+    
+    
+    %%%%%%%
+    figure; set(gcf, 'position', [680 380 660 720]);
+    CSFSurfStatView(squeeze(RI_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), template_S, 'INC', 'Relative Intensity zscore'); CSFSurfStatViewColLim([-5 5]); 
+    exportfig(gcf, [output_dir '/' case_num '/' case_prefix '_' case_num '_Intracortical_RI_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+
+    figure; set(gcf, 'position', [680 380 660 400]);
+    CSFSurfStatView(squeeze(RI_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), template_S, 'INC', 'Relative Intensity zscore'); CSFSurfStatViewColLim([-5 5]); 
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_RI_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);    
+
+    figure; set(gcf, 'position', [680 380 660 720]);
+    CSFSurfStatView(squeeze(PG_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), template_S, 'INC', 'Perpendicular Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Intracortical_PG_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+
+    figure; set(gcf, 'position', [680 380 660 400]);
+    CSFSurfStatView(squeeze(PG_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), template_S, 'INC', 'Perpendicular Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_PG_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);    
+
+    figure; set(gcf, 'position', [680 380 660 720]);
+    CSFSurfStatView(squeeze(TG_zscore_pat(i, :, 1:5))'.*kron(template_mask, ones(intracortical_surface_number+2, 1)), template_S, 'INC', 'Tangential Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Intracortical_TG_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);
+
+    figure; set(gcf, 'position', [680 380 660 400]);
+    CSFSurfStatView(squeeze(TG_zscore_pat(i, :, 6:8))'.*kron(template_mask, ones(subcortical_surface_number, 1)), template_S, 'INC', 'Tangential Gradient zscore'); CSFSurfStatViewColLim([-5 5]);
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_Subcortical_TG_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+    
+    figure; set(gcf, 'position', [680 380 660 200]);
+    CSFSurfStatView(CT_zscore_pat(i, :).*template_mask, template_S, 'MF', 'Cortical Thickness zscore'); CSFSurfStatViewColLim([-5 5]); 
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_CT_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+
+    figure; set(gcf, 'position', [680 380 660 200]);
+    CSFSurfStatView(MC_zscore_pat(i, :).*template_mask, template_S, 'MF', 'Mean Curvature zscore'); CSFSurfStatViewColLim([-5 5]); 
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_MC_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);  
+
+    figure; set(gcf, 'position', [680 380 660 200]);
+    CSFSurfStatView(SD_zscore_pat(i, :).*template_mask, template_S, 'MF', 'Sulcal Depth zscore'); CSFSurfStatViewColLim([-5 5]);
+    exportfig(gcf, [output_dir '/' case_num '/'  case_prefix '_' case_num '_midsurface_SD_zscore_template' ], 'Format','jpeg','FontMode', 'fixed', 'FontSize', 10, 'color', 'cmyk','Resolution',300 ); close(gcf);     
+end
+
+
+    
